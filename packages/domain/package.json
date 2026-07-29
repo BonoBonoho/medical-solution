@@ -1,0 +1,26 @@
+{
+  "name": "@mediwork/domain",
+  "version": "0.1.0",
+  "private": true,
+  "description": "근로시간 산정·규칙 엔진·연차 산정 등 순수 도메인 로직. 서버·웹·모바일이 공유한다.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
