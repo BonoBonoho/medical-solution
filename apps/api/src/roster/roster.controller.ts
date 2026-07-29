@@ -34,7 +34,12 @@ function present(detail: Awaited<ReturnType<RosterService['detail']>>): unknown 
       name: m.name,
       jobFamily: m.jobFamily,
     })),
-    assignments: detail.assignments,
+    assignments: detail.evaluation.shifts.map((s) => ({
+      memberId: s.memberId,
+      workDate: s.workDate,
+      shiftCode: s.shiftCode,
+      shiftName: s.shiftName,
+    })),
     violations: detail.evaluation.violations.map((v) => ({
       ruleCode: v.ruleCode,
       severity: v.severity,
@@ -44,7 +49,7 @@ function present(detail: Awaited<ReturnType<RosterService['detail']>>): unknown 
       subjects: v.subjects,
     })),
     ruleSetVersions: detail.evaluation.appliedRuleSetVersions,
-    weekly: detail.worktime.weekly.map((w) => ({
+    weekly: detail.evaluation.weekly.map((w) => ({
       memberId: w.memberId,
       weekStart: w.weekStart,
       totalMinutes: w.totalMinutes,
@@ -52,5 +57,11 @@ function present(detail: Awaited<ReturnType<RosterService['detail']>>): unknown 
       nightMinutes: w.nightMinutes,
       offDays: w.offDays,
     })),
+    /**
+     * 웹 그리드가 편집 중 같은 계산을 로컬에서 돌리기 위한 입력 일체.
+     * 이게 없으면 셀 하나 바꿀 때마다 서버 왕복이거나, 웹이 계산을
+     * 따로 구현해 화면과 확정 판정이 갈라진다.
+     */
+    plan: detail.plan,
   };
 }

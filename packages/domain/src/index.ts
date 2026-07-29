@@ -19,6 +19,8 @@ export * from './rules/engine.js';
 export { EVALUATORS } from './rules/evaluators.js';
 export * from './rules/presets.js';
 
+export * from './roster/evaluate.js';
+
 export * from './leave/units.js';
 export * from './leave/accrual.js';
 export * from './leave/ledger.js';

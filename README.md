@@ -54,10 +54,10 @@ AI 듀티표 생성 → 수가 리포트(간호등급/야간전담) → PC 사�
 ## 현재 구현 상태
 
 ```
-packages/domain/   ✅  근로시간 산정 · 규칙 엔진 · 연차 · 위치 검증   테스트 132개
+packages/domain/   ✅  근로시간 산정 · 규칙 엔진 · 연차 · 위치 검증   테스트 140개
 apps/api/          ✅  근태 · 근무표 · 휴가 MVP 경로                  테스트 65개
                        PostgreSQL + RLS 테넌트 격리 (인메모리와 동일 e2e 통과)
-apps/web/          ⬜  Next.js 관리자 웹
+apps/web/          ✅  근무표 그리드 (키보드 편집 · 실시간 규칙 평가)  테스트 17개
 apps/mobile/       ⬜  React Native
 apps/extension/    ⬜  브라우저 확장 (MV3)
 apps/ai/           ⬜  Python FastAPI + OR-Tools
@@ -65,7 +65,12 @@ apps/ai/           ⬜  Python FastAPI + OR-Tools
 
 ```bash
 pnpm install
-pnpm check      # 전체 타입체크 + 테스트 (인메모리 159개)
+pnpm check      # 전체 타입체크 + 테스트 (인메모리 195개)
+
+# PostgreSQL RLS 테스트까지 함께 돌리려면
+export DATABASE_ADMIN_URL=postgres://postgres@localhost:5432/mediwork_test
+export DATABASE_URL=postgres://mediwork_app@localhost:5432/mediwork_test
+pnpm check      # 222개
 ```
 
 API 실행 방법과 시드 계정은 [apps/api/README.md](apps/api/README.md),

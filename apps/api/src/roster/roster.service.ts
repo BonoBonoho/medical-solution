@@ -1,40 +1,35 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   DEFAULT_RULE_SETS,
-  aggregateWeekly,
-  computeDailyWorktime,
-  evaluateRules,
+  evaluateRosterPlan,
   hasBlockingViolations,
-  resolveShiftInterval,
   ruleSetsWithHealthcareException,
   type DailyWorktime,
-  type EvaluatedShift,
-  type EvaluationResult,
+  type IdentifiedShiftType,
   type LocalDate,
-  type RuleContext,
+  type RosterEvaluation,
+  type RosterPlan,
+  type RuleMember,
   type RuleSet,
-  type ShiftAssignment,
   type WeeklyWorktime,
 } from '@mediwork/domain';
 import { ApiError } from '../common/errors.js';
 import { currentContext } from '../common/tenant-context.js';
 import { STORE, type Store } from '../store/ports.js';
-import type { Member, Roster } from '../store/types.js';
+import type { Member, Roster, TenantShiftType } from '../store/types.js';
 
 export interface RosterDetail {
   readonly roster: Roster;
   readonly members: readonly Member[];
-  readonly assignments: readonly {
-    memberId: string;
-    workDate: LocalDate;
-    shiftCode: string;
-    shiftName: string;
-  }[];
-  readonly evaluation: EvaluationResult;
-  readonly worktime: {
-    readonly daily: readonly DailyWorktime[];
-    readonly weekly: readonly WeeklyWorktime[];
-  };
+  /**
+   * 웹 그리드가 **같은 계산을 로컬에서 다시 돌리기 위한** 입력 일체.
+   *
+   * 편집할 때마다 서버에 물으면 느려서 못 쓰고, 웹이 계산을 따로 구현하면
+   * 화면과 확정 판정이 갈라진다. 데이터를 통째로 내려주고 같은 도메인 함수를
+   * 부르게 하는 것이 두 문제를 동시에 없애는 유일한 방법이다.
+   */
+  readonly plan: RosterPlan;
+  readonly evaluation: RosterEvaluation;
 }
 
 @Injectable()
@@ -68,115 +63,31 @@ export class RosterService {
     const assignments = await this.store.rosters.listAssignments(rosterId);
     const memberIds = [...new Set(assignments.map((a) => a.memberId))];
     const members = await this.store.members.listByIds(memberIds);
-    const shiftTypes = new Map(
-      (await this.store.rosters.listShiftTypes()).map((s) => [s.id, s]),
-    );
-    const holidays = new Set(
-      (await this.store.rosters.listHolidays()).map((h) => h.date),
-    );
+    const shiftTypes = await this.store.rosters.listShiftTypes();
+    const holidays = await this.store.rosters.listHolidays();
 
-    const shifts: EvaluatedShift[] = [];
-    const daily: DailyWorktime[] = [];
-
-    for (const assignment of assignments) {
-      const shiftType = shiftTypes.get(assignment.shiftTypeId);
-      if (shiftType === undefined) continue;
-
-      const domainAssignment: ShiftAssignment = {
-        id: assignment.id,
-        memberId: assignment.memberId,
-        workDate: assignment.workDate,
-        shiftType,
-      };
-      const interval = resolveShiftInterval(domainAssignment);
-
-      shifts.push({
-        id: assignment.id,
-        memberId: assignment.memberId,
-        workDate: assignment.workDate,
-        shiftCode: shiftType.code,
-        shiftName: shiftType.name,
-        interval,
-        isNight: shiftType.isNight,
-        isWorking:
-          shiftType.countsAsWork &&
-          shiftType.category !== 'OFF' &&
-          shiftType.category !== 'LEAVE',
-      });
-
-      daily.push(
-        computeDailyWorktime({
-          memberId: assignment.memberId,
-          workDate: assignment.workDate,
-          interval,
-          breakMinutes: shiftType.breakMinutes,
-          isHoliday: holidays.has(assignment.workDate),
-          dutyMode: shiftType.dutyMode,
-          dutyRatio: shiftType.dutyRatio,
-          paidMinutesOverride: shiftType.paidMinutesOverride,
-        }),
-      );
-    }
-
-    const weekly = aggregateWeekly(daily);
-
-    // 구성원별로 평가한다. 규칙 스코프가 직군·고용형태별로 다르기 때문이다.
-    const ruleSetsByWorksite = new Map<string, RuleSet[]>();
+    const ruleSetsByWorksite: Record<string, RuleSet[]> = {};
     for (const worksiteId of new Set(members.map((m) => m.worksiteId))) {
-      ruleSetsByWorksite.set(worksiteId, await this.ruleSetsFor(worksiteId));
+      ruleSetsByWorksite[worksiteId] = await this.ruleSetsFor(worksiteId);
     }
 
-    const violations = members.flatMap((member) => {
-      const context: RuleContext = {
-        member: {
-          id: member.id,
-          name: member.name,
-          worksiteId: member.worksiteId,
-          jobFamily: member.jobFamily,
-          employmentType: member.employmentType,
-        },
-        periodStart: roster.periodStart,
-        periodEnd: roster.periodEnd,
-        basis: 'PLANNED',
-      };
-      return evaluateRules(ruleSetsByWorksite.get(member.worksiteId) ?? [], context, {
-        shifts,
-        dailies: daily.map((d) => ({
-          memberId: d.memberId,
-          workDate: d.workDate,
-          paidMinutes: d.paidMinutes,
-          breakMinutes: d.breakMinutes,
-        })),
-        weeklies: weekly.map((w) => ({
-          memberId: w.memberId,
-          weekStart: w.weekStart,
-          totalMinutes: w.totalMinutes,
-          offDays: w.offDays,
-        })),
-      }).violations;
-    });
-
-    const versions = new Set<string>();
-    for (const sets of ruleSetsByWorksite.values()) {
-      for (const rs of sets) versions.add(rs.version);
-    }
-
-    return {
-      roster,
-      members,
-      assignments: shifts.map((s) => ({
-        memberId: s.memberId,
-        workDate: s.workDate,
-        shiftCode: s.shiftCode,
-        shiftName: s.shiftName,
+    const plan: RosterPlan = {
+      periodStart: roster.periodStart,
+      periodEnd: roster.periodEnd,
+      members: members.map(toRuleMember),
+      shiftTypes: shiftTypes.map(toIdentifiedShiftType),
+      assignments: assignments.map((a) => ({
+        id: a.id,
+        memberId: a.memberId,
+        workDate: a.workDate,
+        shiftTypeId: a.shiftTypeId,
       })),
-      evaluation: {
-        violations,
-        appliedRuleSetVersions: [...versions].sort(),
-        evaluatedRuleCodes: [...new Set(violations.map((v) => v.ruleCode))].sort(),
-      },
-      worktime: { daily, weekly },
+      holidays: holidays.map((h) => h.date),
+      ruleSetsByWorksite,
+      basis: 'PLANNED',
     };
+
+    return { roster, members, plan, evaluation: evaluateRosterPlan(plan) };
   }
 
   /**
@@ -239,4 +150,21 @@ export class RosterService {
 
     return this.detail(rosterId);
   }
+}
+
+/** 저장소의 Member에서 규칙 평가에 필요한 필드만 뽑는다. 개인정보는 넘기지 않는다. */
+function toRuleMember(member: Member): RuleMember {
+  return {
+    id: member.id,
+    name: member.name,
+    worksiteId: member.worksiteId,
+    jobFamily: member.jobFamily,
+    employmentType: member.employmentType,
+  };
+}
+
+/** tenantId를 떼어낸다. 도메인 계산에 테넌트는 필요 없고, 웹으로 새어나갈 이유도 없다. */
+function toIdentifiedShiftType(shiftType: TenantShiftType): IdentifiedShiftType {
+  const { tenantId: _tenantId, ...rest } = shiftType;
+  return rest;
 }

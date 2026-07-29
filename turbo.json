@@ -1,16 +1,31 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalEnv": ["NODE_ENV"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**"]
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
+      "env": ["NEXT_PUBLIC_API_BASE", "NEXT_PUBLIC_DEV_AUTH"]
     },
     "test": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      // 이걸 선언하지 않으면 turbo가 환경변수를 걸러내 PostgreSQL 테스트가
+      // 조용히 스킵된다. "통과했다"는 결과만 남고 실제로는 안 돈다.
+      "env": ["DATABASE_URL", "DATABASE_ADMIN_URL"]
+    },
+    "test:watch": {
+      "dependsOn": ["^build"],
+      "cache": false,
+      "persistent": true,
+      "env": ["DATABASE_URL", "DATABASE_ADMIN_URL"]
     },
     "typecheck": {
       "dependsOn": ["^build"]
     },
-    "lint": {}
+    "lint": {},
+    "dev": {
+      "cache": false,
+      "persistent": true
+    }
   }
 }
