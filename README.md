@@ -55,7 +55,8 @@ AI 듀티표 생성 → 수가 리포트(간호등급/야간전담) → PC 사�
 
 ```
 packages/domain/   ✅  근로시간 산정 · 규칙 엔진 · 연차 · 위치 검증   테스트 132개
-apps/api/          ✅  근태 · 근무표 · 휴가 MVP 경로                  e2e 26개
+apps/api/          ✅  근태 · 근무표 · 휴가 MVP 경로                  테스트 65개
+                       PostgreSQL + RLS 테넌트 격리 (인메모리와 동일 e2e 통과)
 apps/web/          ⬜  Next.js 관리자 웹
 apps/mobile/       ⬜  React Native
 apps/extension/    ⬜  브라우저 확장 (MV3)
@@ -64,7 +65,7 @@ apps/ai/           ⬜  Python FastAPI + OR-Tools
 
 ```bash
 pnpm install
-pnpm check      # 전체 타입체크 + 테스트 (158개)
+pnpm check      # 전체 타입체크 + 테스트 (인메모리 159개)
 ```
 
 API 실행 방법과 시드 계정은 [apps/api/README.md](apps/api/README.md),

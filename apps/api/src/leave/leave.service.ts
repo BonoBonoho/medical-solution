@@ -9,12 +9,11 @@ import {
   restoreDeductions,
   unitsToDays,
   type LeaveBalance,
-  type LeaveGrant,
   type LocalDate,
 } from '@mediwork/domain';
 import { ApiError } from '../common/errors.js';
 import { currentContext, tenantId } from '../common/tenant-context.js';
-import { MemoryStore } from '../store/memory-store.js';
+import { STORE, type Store } from '../store/ports.js';
 import type { LeaveRequest, TenantLeaveGrant } from '../store/types.js';
 
 export interface CreateLeaveRequestInput {
@@ -35,26 +34,22 @@ export interface LeaveRequestResult {
 
 @Injectable()
 export class LeaveService {
-  constructor(@Inject(MemoryStore) private readonly store: MemoryStore) {}
+  constructor(@Inject(STORE) private readonly store: Store) {}
 
-  balance(memberId: string, asOf: LocalDate): LeaveBalance {
-    const grants = this.store
-      .scoped(this.store.leaveGrants)
-      .filter((g) => g.memberId === memberId);
+  async balance(memberId: string, asOf: LocalDate): Promise<LeaveBalance> {
+    const grants = await this.store.leaves.listGrants(memberId);
     return computeBalance(grants, asOf, 'ANNUAL');
   }
 
-  grantsFor(memberId: string): TenantLeaveGrant[] {
-    return this.store.scoped(this.store.leaveGrants).filter((g) => g.memberId === memberId);
+  grantsFor(memberId: string): Promise<TenantLeaveGrant[]> {
+    return this.store.leaves.listGrants(memberId);
   }
 
-  create(input: CreateLeaveRequestInput): LeaveRequestResult {
+  async create(input: CreateLeaveRequestInput): Promise<LeaveRequestResult> {
     const { memberId } = currentContext();
 
-    const leaveType = this.store
-      .scoped(this.store.leaveTypes)
-      .find((t) => t.id === input.leaveTypeId);
-    if (leaveType === undefined) {
+    const leaveType = await this.store.leaves.findLeaveType(input.leaveTypeId);
+    if (leaveType === null) {
       throw new ApiError('NOT_FOUND', '휴가 종류를 찾을 수 없습니다.');
     }
 
@@ -69,10 +64,9 @@ export class LeaveService {
     }
 
     let deductions: { grantId: string; units: number }[] = [];
+    let grants: TenantLeaveGrant[] = [];
     if (leaveType.deductsFromBalance) {
-      const grants = this.store
-        .scoped(this.store.leaveGrants)
-        .filter((g) => g.memberId === memberId);
+      grants = await this.store.leaves.listGrants(memberId);
       try {
         deductions = planDeduction(grants, units, input.startDate).map((d) => ({
           grantId: d.grantId,
@@ -105,27 +99,30 @@ export class LeaveService {
       status: 'PENDING',
       deductions,
     };
-    this.store.leaveRequests.push(request);
+    await this.store.leaves.insertRequest(request, deductions);
 
     // 잔액은 승인 시점이 아니라 신청 시점에 예약 차감한다.
     // 그러지 않으면 같은 잔액으로 중복 신청이 가능해진다.
-    this.applyToGrants(deductions);
+    if (deductions.length > 0) {
+      const updated = applyDeductions(
+        grants,
+        deductions.map((d) => ({ ...d, expiresAt: '9999-12-31' })),
+      ) as TenantLeaveGrant[];
+      await this.store.leaves.saveGrants(updated);
+    }
 
     return {
       request,
-      balanceAfter: this.balance(memberId, input.startDate),
-      warnings: this.coverageWarnings(memberId, input.startDate, input.endDate),
+      balanceAfter: await this.balance(memberId, input.startDate),
+      warnings: await this.coverageWarnings(memberId, input.startDate, input.endDate),
     };
   }
 
-  cancel(requestId: string): LeaveRequest {
-    const index = this.store.leaveRequests.findIndex(
-      (r) => r.id === requestId && r.tenantId === tenantId(),
-    );
-    if (index === -1) {
+  async cancel(requestId: string): Promise<LeaveRequest> {
+    const request = await this.store.leaves.findRequest(requestId);
+    if (request === null) {
       throw new ApiError('NOT_FOUND', '휴가 신청을 찾을 수 없습니다.');
     }
-    const request = this.store.leaveRequests[index]!;
     if (request.memberId !== currentContext().memberId) {
       throw new ApiError('FORBIDDEN', '본인의 신청만 취소할 수 있습니다.');
     }
@@ -133,9 +130,7 @@ export class LeaveService {
       throw new ApiError('CONFLICT', '이미 취소된 신청입니다.');
     }
 
-    const grants = this.store
-      .scoped(this.store.leaveGrants)
-      .filter((g) => g.memberId === request.memberId);
+    const grants = await this.store.leaves.listGrants(request.memberId);
     const restored = restoreDeductions(
       grants,
       request.deductions.map((d) => ({
@@ -146,11 +141,11 @@ export class LeaveService {
       request.startDate,
       'CARRY_FORWARD',
     );
-    this.replaceGrants(restored.grants);
+    await this.store.leaves.saveGrants(restored.grants as TenantLeaveGrant[]);
+    await this.store.leaves.setRequestStatus(requestId, 'CANCELLED');
 
     const updated: LeaveRequest = { ...request, status: 'CANCELLED' };
-    this.store.leaveRequests[index] = updated;
-    this.store.audit({
+    await this.store.audit.append({
       actorId: currentContext().memberId,
       action: 'UPDATE',
       entityType: 'leaveRequest',
@@ -160,42 +155,32 @@ export class LeaveService {
     return updated;
   }
 
-  listMine(memberId: string): LeaveRequest[] {
-    return this.store
-      .scoped(this.store.leaveRequests)
-      .filter((r) => r.memberId === memberId)
-      .sort((a, b) => b.startDate.localeCompare(a.startDate));
+  listMine(memberId: string): Promise<LeaveRequest[]> {
+    return this.store.leaves.listRequestsByMember(memberId);
   }
 
   /** 같은 부서에서 같은 기간에 휴가가 겹치는지 확인한다. */
-  private coverageWarnings(
+  private async coverageWarnings(
     memberId: string,
     startDate: LocalDate,
     endDate: LocalDate,
-  ): { code: string; message: string }[] {
-    const member = this.store.scoped(this.store.members).find((m) => m.id === memberId);
-    if (member === undefined) return [];
+  ): Promise<{ code: string; message: string }[]> {
+    const member = await this.store.members.findById(memberId);
+    if (member === null) return [];
 
-    const colleagues = this.store
-      .scoped(this.store.members)
-      .filter((m) => m.departmentId === member.departmentId && m.id !== memberId)
-      .map((m) => m.id);
+    const department = await this.store.members.listByDepartment(member.departmentId);
+    const colleagues = department.filter((m) => m.id !== memberId).map((m) => m.id);
 
-    const overlapping = this.store
-      .scoped(this.store.leaveRequests)
-      .filter(
-        (r) =>
-          colleagues.includes(r.memberId) &&
-          r.status !== 'CANCELLED' &&
-          r.status !== 'REJECTED' &&
-          r.startDate <= endDate &&
-          r.endDate >= startDate,
-      );
-
+    const overlapping = await this.store.leaves.listOverlappingRequests(
+      colleagues,
+      startDate,
+      endDate,
+    );
     if (overlapping.length === 0) return [];
 
+    const byId = new Map(department.map((m) => [m.id, m.name]));
     const names = overlapping
-      .map((r) => this.store.scoped(this.store.members).find((m) => m.id === r.memberId)?.name)
+      .map((r) => byId.get(r.memberId))
       .filter((n): n is string => n !== undefined);
 
     return [
@@ -206,23 +191,4 @@ export class LeaveService {
     ];
   }
 
-  private applyToGrants(deductions: readonly { grantId: string; units: number }[]): void {
-    if (deductions.length === 0) return;
-    const scoped = this.store.scoped(this.store.leaveGrants);
-    const updated = applyDeductions(
-      scoped,
-      deductions.map((d) => ({ ...d, expiresAt: '9999-12-31' })),
-    );
-    this.replaceGrants(updated);
-  }
-
-  /** 부여 원장을 갱신한다. tenantId는 기존 행에서 보존한다. */
-  private replaceGrants(updated: readonly LeaveGrant[]): void {
-    for (const grant of updated) {
-      const index = this.store.leaveGrants.findIndex((g) => g.id === grant.id);
-      if (index === -1) continue;
-      const existing = this.store.leaveGrants[index]!;
-      this.store.leaveGrants[index] = { ...grant, tenantId: existing.tenantId };
-    }
-  }
 }

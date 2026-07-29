@@ -8,23 +8,23 @@ export class RosterController {
   constructor(@Inject(RosterService) private readonly service: RosterService) {}
 
   @Get(':id')
-  detail(@Param('id') id: string): unknown {
-    return { data: present(this.service.detail(id)) };
+  async detail(@Param('id') id: string): Promise<unknown> {
+    return { data: present(await this.service.detail(id)) };
   }
 
   @Post(':id/publish')
-  publish(
+  async publish(
     @Param('id') id: string,
     @Body() body: { overrideViolations?: { ruleCode: string; reason: string }[] },
-  ): unknown {
+  ): Promise<unknown> {
     if (!hasRole('WARD_MANAGER') && !hasRole('HR_MANAGER') && !hasRole('SUPER_ADMIN')) {
       throw new ApiError('FORBIDDEN', '근무표를 확정할 권한이 없습니다.');
     }
-    return { data: present(this.service.publish(id, body.overrideViolations ?? [])) };
+    return { data: present(await this.service.publish(id, body.overrideViolations ?? [])) };
   }
 }
 
-function present(detail: ReturnType<RosterService['detail']>): unknown {
+function present(detail: Awaited<ReturnType<RosterService['detail']>>): unknown {
   return {
     id: detail.roster.id,
     status: detail.roster.status,

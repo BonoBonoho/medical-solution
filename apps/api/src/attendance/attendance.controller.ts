@@ -40,7 +40,7 @@ export class AttendanceController {
   @Post('records')
   // 명세상 200. 멱등 재시도 시 같은 레코드를 돌려주므로 201(Created)이 아니다.
   @HttpCode(HttpStatus.OK)
-  record(@Body() body: RecordBody): unknown {
+  async record(@Body() body: RecordBody): Promise<unknown> {
     const recordType = body.recordType;
     if (recordType === undefined || !RECORD_TYPES.includes(recordType as AttendanceRecordType)) {
       throw new ApiError(
@@ -55,7 +55,7 @@ export class AttendanceController {
       throw new ApiError('VALIDATION_ERROR', 'capturedAt이 올바른 시각 형식이 아닙니다.');
     }
 
-    const result = this.service.record({
+    const result = await this.service.record({
       recordType: recordType as AttendanceRecordType,
       capturedAt,
       ...(body.location !== undefined ? { location: body.location } : {}),
@@ -79,38 +79,42 @@ export class AttendanceController {
   }
 
   @Get('me/today')
-  today(): unknown {
+  async today(): Promise<unknown> {
     const { memberId } = currentContext();
-    return { data: this.service.today(memberId).map(serialize) };
+    return { data: (await this.service.today(memberId)).map(serialize) };
   }
 
   @Get('me')
-  mine(@Query('from') from?: string, @Query('to') to?: string): unknown {
+  async mine(@Query('from') from?: string, @Query('to') to?: string): Promise<unknown> {
     const { memberId } = currentContext();
     const today = toLocalDate(new Date());
     return {
-      data: this.service.listForMember(memberId, from ?? today, to ?? today).map(serialize),
+      data: (await this.service.listForMember(memberId, from ?? today, to ?? today)).map(
+        serialize,
+      ),
     };
   }
 
   @Get('members/:memberId')
-  forMember(
+  async forMember(
     @Param('memberId') memberId: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
-  ): unknown {
+  ): Promise<unknown> {
     requireManager();
     const today = toLocalDate(new Date());
     return {
-      data: this.service.listForMember(memberId, from ?? today, to ?? today).map(serialize),
+      data: (await this.service.listForMember(memberId, from ?? today, to ?? today)).map(
+        serialize,
+      ),
     };
   }
 
   @Post('pending-reviews/:id/resolve')
-  resolve(
+  async resolve(
     @Param('id') id: string,
     @Body() body: { action?: string; comment?: string },
-  ): unknown {
+  ): Promise<unknown> {
     requireManager();
     if (body.action !== 'APPROVE' && body.action !== 'REJECT') {
       throw new ApiError('VALIDATION_ERROR', 'action은 APPROVE 또는 REJECT여야 합니다.');
@@ -119,7 +123,9 @@ export class AttendanceController {
       // 사유 없는 처리를 막는다. 이 기록 자체가 병원의 자산이 된다.
       throw new ApiError('VALIDATION_ERROR', '처리 사유(comment)는 필수입니다.');
     }
-    return { data: serialize(this.service.resolvePending(id, body.action, body.comment)) };
+    return {
+      data: serialize(await this.service.resolvePending(id, body.action, body.comment)),
+    };
   }
 }
 

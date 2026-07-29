@@ -9,10 +9,10 @@ export class LeaveController {
   constructor(@Inject(LeaveService) private readonly service: LeaveService) {}
 
   @Get('me/balance')
-  balance(@Query('asOf') asOf?: string): unknown {
+  async balance(@Query('asOf') asOf?: string): Promise<unknown> {
     const { memberId } = currentContext();
     const date = asOf ?? toLocalDate(new Date());
-    const balance = this.service.balance(memberId, date);
+    const balance = await this.service.balance(memberId, date);
     return {
       data: {
         asOf: balance.asOf,
@@ -32,7 +32,7 @@ export class LeaveController {
   }
 
   @Post('requests')
-  create(
+  async create(
     @Body()
     body: {
       leaveTypeId?: string;
@@ -41,11 +41,11 @@ export class LeaveController {
       reason?: string;
       units?: number;
     },
-  ): unknown {
+  ): Promise<unknown> {
     if (body.leaveTypeId === undefined || body.startDate === undefined) {
       throw new ApiError('VALIDATION_ERROR', 'leaveTypeId와 startDate는 필수입니다.');
     }
-    const result = this.service.create({
+    const result = await this.service.create({
       leaveTypeId: body.leaveTypeId,
       startDate: body.startDate,
       endDate: body.endDate ?? body.startDate,
@@ -69,10 +69,10 @@ export class LeaveController {
   }
 
   @Get('requests')
-  list(): unknown {
+  async list(): Promise<unknown> {
     const { memberId } = currentContext();
     return {
-      data: this.service.listMine(memberId).map((r) => ({
+      data: (await this.service.listMine(memberId)).map((r) => ({
         id: r.id,
         leaveTypeId: r.leaveTypeId,
         startDate: r.startDate,
@@ -84,8 +84,8 @@ export class LeaveController {
   }
 
   @Post('requests/:id/cancel')
-  cancel(@Param('id') id: string): unknown {
-    const request = this.service.cancel(id);
+  async cancel(@Param('id') id: string): Promise<unknown> {
+    const request = await this.service.cancel(id);
     return { data: { id: request.id, status: request.status } };
   }
 }
