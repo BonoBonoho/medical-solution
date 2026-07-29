@@ -4,19 +4,20 @@ AWS 서울 리전(`ap-northeast-2`) Terraform 구성.
 
 > ## ⚠️ 이 구성은 실제로 적용된 적이 없다
 >
-> 이 저장소에는 유효한 AWS 자격증명이 없어 `terraform apply`는커녕
-> `plan`도 실행하지 못했다. 게다가 개발 환경의 네트워크 정책이
-> `registry.terraform.io`를 막고 있어 **프로바이더를 내려받지 못했고,
-> 따라서 `terraform validate`도 돌리지 못했다.**
+> 이 저장소에는 유효한 AWS 자격증명이 없어 `terraform plan`도 `apply`도
+> 실행하지 못했다.
 >
-> 여기서 실제로 확인한 것은 `terraform fmt -check -recursive` 통과,
-> 즉 **HCL 구문 파싱까지**다. 속성 이름이 맞는지, 필수 인자가 빠지지
-> 않았는지, 참조가 유효한지는 확인되지 않았다.
+> **검증된 것**: GitHub Actions의 `terraform` 잡이 AWS 프로바이더 v5.100.0을
+> 내려받아 `terraform init` + `validate`를 통과했다. 속성 이름·필수 인자·타입·
+> 모듈 간 참조는 프로바이더 스키마에 대해 확인됐다.
+> (개발 환경에서는 네트워크 정책이 `registry.terraform.io`를 막아 `fmt`까지만
+> 가능했고, CI가 그 공백을 메운다.)
 >
-> `.github/workflows/ci.yml`의 `terraform` 잡이 `init -backend=false`와
-> `validate`를 돌린다. GitHub Actions에서는 레지스트리에 접근할 수 있으므로
-> **CI를 한 번 돌려 초록인지 먼저 확인할 것.** 그 다음 `plan` 결과를 눈으로
-> 보고, 그 다음에 `apply` 한다.
+> **검증되지 않은 것**: 실제 AWS 계정에서의 동작. `validate`는 IAM 권한,
+> 서비스 할당량, 리전별 가용성, 리소스 간 런타임 제약(예: 인증서 리전 일치,
+> 서브넷 CIDR 충돌)을 확인하지 않는다.
+>
+> **`plan` 결과를 눈으로 확인한 뒤에 `apply` 할 것.**
 
 ## 구성
 

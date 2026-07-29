@@ -37,8 +37,18 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
       - run: pnpm install --frozen-lockfile
+
+      # `pnpm check`는 워크스페이스 전체를 돈다. apps/ai의 test 스크립트가
+      # pytest를 부르므로 여기서도 파이썬 의존이 필요하다.
+      # 이걸 빼고 AI 패키지를 필터로 제외하면 "check가 전부를 검사한다"는
+      # 말이 거짓이 된다.
+      - working-directory: apps/ai
+        run: pip install -e '.[dev]'
 
       - name: 애플리케이션 DB 롤 생성
         run: |

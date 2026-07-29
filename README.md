@@ -61,11 +61,15 @@ apps/web/          ✅  근무표 그리드 (키보드 편집 · 실시간 규�
 apps/ai/           ✅  근무표 자동 생성 (CP-SAT)                    테스트 51개
 apps/mobile/       ⬜  React Native
 apps/extension/    ⬜  브라우저 확장 (MV3)
-infra/             🟡  Terraform (AWS) — 작성 완료, 적용·검증 안 됨
+infra/             🟡  Terraform (AWS) — validate 통과, 미적용
 ```
+
+`pnpm check`는 워크스페이스 전체(TypeScript + Python)를 검사한다.
 
 ```bash
 pnpm install
+pip install -e 'apps/ai[dev]'   # AI 서비스 테스트에 필요
+
 pnpm check      # 전체 타입체크 + 테스트 (인메모리 246개)
 
 # PostgreSQL RLS 테스트까지 함께 돌리려면

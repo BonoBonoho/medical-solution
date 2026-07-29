@@ -31,8 +31,8 @@ apps/ai/             ✅ 근무표 자동 생성 · 테스트 51개
 ├── solver.py        CP-SAT 모델 · 충돌 진단
 ├── verify.py        생성 결과 독립 재검증
 └── nl.py            자연어 제약 해석 (LLM 호출부는 미검증)
-infra/               🟡 Terraform 작성 완료 — 적용·검증 안 됨
-                     (자격증명 없음 + 네트워크 정책이 프로바이더 다운로드 차단)
+infra/               🟡 Terraform 작성 완료 — validate 통과, 미적용
+                     (자격증명이 없어 plan·apply는 실행하지 못함)
 ```
 
 ---
