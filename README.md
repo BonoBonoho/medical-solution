@@ -58,9 +58,10 @@ packages/domain/   ✅  근로시간 산정 · 규칙 엔진 · 연차 · 위치
 apps/api/          ✅  근태 · 근무표 · 휴가 MVP 경로                  테스트 65개
                        PostgreSQL + RLS 테넌트 격리 (인메모리와 동일 e2e 통과)
 apps/web/          ✅  근무표 그리드 (키보드 편집 · 실시간 규칙 평가)  테스트 17개
+apps/ai/           ✅  근무표 자동 생성 (CP-SAT)                    테스트 51개
 apps/mobile/       ⬜  React Native
 apps/extension/    ⬜  브라우저 확장 (MV3)
-apps/ai/           ✅  근무표 자동 생성 (CP-SAT)                   테스트 51개
+infra/             🟡  Terraform (AWS) — 작성 완료, 적용·검증 안 됨
 ```
 
 ```bash

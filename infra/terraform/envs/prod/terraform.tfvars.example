@@ -1,0 +1,10 @@
+certificate_arn = "arn:aws:acm:ap-northeast-2:CHANGEME:certificate/CHANGEME"
+
+api_image = "CHANGEME.dkr.ecr.ap-northeast-2.amazonaws.com/mediwork-api:latest"
+ai_image  = "CHANGEME.dkr.ecr.ap-northeast-2.amazonaws.com/mediwork-ai:latest"
+
+# 같은 이름의 최종 스냅샷이 있으면 DB 삭제가 실패한다. 매번 다른 값을 준다.
+db_final_snapshot_suffix = "20260729"
+
+cors_origins      = "https://app.example.com"
+access_log_bucket = ""

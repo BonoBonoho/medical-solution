@@ -1,0 +1,17 @@
+# terraform init -backend-config=backend.hcl
+#
+# state 버킷은 Terraform 밖에서 미리 만든다. state를 담을 버킷을
+# Terraform으로 만들면 닭이 먼저냐 달걀이 먼저냐가 된다.
+#
+#   aws s3api create-bucket --bucket mediwork-tfstate-<계정ID> \
+#     --region ap-northeast-2 \
+#     --create-bucket-configuration LocationConstraint=ap-northeast-2
+#   aws s3api put-bucket-versioning --bucket mediwork-tfstate-<계정ID> \
+#     --versioning-configuration Status=Enabled
+#   aws s3api put-public-access-block --bucket mediwork-tfstate-<계정ID> \
+#     --public-access-block-configuration \
+#     BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+
+bucket = "mediwork-tfstate-CHANGEME"
+key    = "prod/terraform.tfstate"
+region = "ap-northeast-2"

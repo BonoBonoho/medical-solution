@@ -1,0 +1,102 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  node:
+    name: 타입체크 · 테스트 (Node)
+    runs-on: ubuntu-latest
+
+    # PostgreSQL을 띄워 RLS 테스트까지 실제로 돌린다.
+    # 인메모리로만 통과시키면 테넌트 격리 검증이 통째로 스킵된다.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: mediwork_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: 애플리케이션 DB 롤 생성
+        run: |
+          # 애플리케이션은 반드시 비-수퍼유저로 붙어야 한다.
+          # 수퍼유저로 접속하면 RLS가 조용히 우회되고, 격리 테스트가
+          # 전부 통과하는 것처럼 보인다.
+          psql "postgres://postgres:postgres@localhost:5432/mediwork_test" \
+            -c "CREATE ROLE mediwork_app LOGIN PASSWORD 'app' NOSUPERUSER NOBYPASSRLS;"
+
+      - run: pnpm check
+        env:
+          DATABASE_ADMIN_URL: postgres://postgres:postgres@localhost:5432/mediwork_test
+          DATABASE_URL: postgres://mediwork_app:app@localhost:5432/mediwork_test
+
+      - name: RLS 테스트가 실제로 돌았는지 확인
+        env:
+          DATABASE_ADMIN_URL: postgres://postgres:postgres@localhost:5432/mediwork_test
+          DATABASE_URL: postgres://mediwork_app:app@localhost:5432/mediwork_test
+        # turbo가 환경변수를 걸러 테스트가 조용히 스킵된 적이 있다.
+        # "통과"가 "돌았다"를 뜻하는지 확인한다.
+        run: |
+          cd apps/api
+          pnpm exec vitest run test/rls.test.ts --reporter=json --outputFile=/tmp/rls.json
+          python3 -c "
+          import json,sys
+          d=json.load(open('/tmp/rls.json'))
+          if d['numTotalTests']==0 or d['numPassedTests']==0:
+              sys.exit('RLS 테스트가 하나도 실행되지 않았습니다.')
+          print(f\"RLS 테스트 {d['numPassedTests']}개 통과\")
+          "
+
+  python:
+    name: 테스트 (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - working-directory: apps/ai
+        run: |
+          pip install -e '.[dev]'
+          python -m pytest -q
+
+  terraform:
+    name: Terraform 검증
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.10.5
+
+      - run: terraform fmt -check -recursive infra/terraform
+
+      # 프로바이더 스키마를 받아 속성 이름·타입·참조까지 확인한다.
+      # 자격증명 없이 동작한다.
+      - working-directory: infra/terraform/envs/prod
+        run: |
+          terraform init -backend=false
+          terraform validate

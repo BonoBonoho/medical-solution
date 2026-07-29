@@ -31,7 +31,8 @@ apps/ai/             ✅ 근무표 자동 생성 · 테스트 51개
 ├── solver.py        CP-SAT 모델 · 충돌 진단
 ├── verify.py        생성 결과 독립 재검증
 └── nl.py            자연어 제약 해석 (LLM 호출부는 미검증)
-infra/               ⬜ 미착수
+infra/               🟡 Terraform 작성 완료 — 적용·검증 안 됨
+                     (자격증명 없음 + 네트워크 정책이 프로바이더 다운로드 차단)
 ```
 
 ---
@@ -313,7 +314,8 @@ medical-solution/
 │   ├── web/                 Next.js 관리자 웹 — 근무표 그리드
 │   ├── ai/                  Python FastAPI + OR-Tools — 근무표 생성
 │   └── mobile/, extension/  (예정)
-├── infra/                   (예정) Terraform
+├── infra/                   Terraform (AWS) — 미적용
+├── .github/workflows/       CI · 배포 파이프라인
 ├── pnpm-workspace.yaml
 ├── turbo.json
 └── tsconfig.base.json

@@ -1,0 +1,111 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: '운영에 배포합니다. "deploy"를 입력하세요.'
+        required: true
+
+# 배포는 수동 트리거만 둔다.
+#
+# main 푸시마다 자동 배포하면 근태 기록을 받는 서비스가 검토 없이 바뀐다.
+# 출퇴근이 몰리는 시간(07·15·23시)에 배포가 걸리면 그 시간의 기록이
+# 흔들린다. 언제 배포할지는 사람이 정해야 한다.
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+permissions:
+  id-token: write # OIDC
+  contents: read
+
+env:
+  AWS_REGION: ap-northeast-2
+  CLUSTER: mediwork-prod
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 확인 문구 검사
+        run: |
+          [ "${{ inputs.confirm }}" = "deploy" ] || {
+            echo "확인 문구가 일치하지 않습니다."; exit 1;
+          }
+
+  deploy:
+    needs: guard
+    runs-on: ubuntu-latest
+    environment: production # 리뷰어 승인을 붙일 수 있다
+
+    strategy:
+      # 하나가 실패하면 나머지도 멈춘다. API만 새 버전이고 AI는 옛 버전인
+      # 상태로 남는 것보다 낫다.
+      fail-fast: true
+      matrix:
+        include:
+          - service: api
+            repository: mediwork-api
+            dockerfile: apps/api/Dockerfile
+            context: .
+          - service: ai
+            repository: mediwork-ai
+            dockerfile: apps/ai/Dockerfile
+            context: apps/ai
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: 이미지 빌드·푸시
+        id: build
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          set -euo pipefail
+          # 태그는 커밋 SHA다. latest를 덮어쓰면 "지금 떠 있는 것이 어느
+          # 커밋인가"를 사후에 확인할 수 없다.
+          TAG="sha-${GITHUB_SHA::12}"
+          IMAGE="$REGISTRY/${{ matrix.repository }}:$TAG"
+          docker buildx build \
+            --platform linux/arm64 \
+            -f ${{ matrix.dockerfile }} \
+            -t "$IMAGE" \
+            --push \
+            ${{ matrix.context }}
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+
+      - name: 태스크 정의 갱신
+        id: taskdef
+        run: |
+          set -euo pipefail
+          aws ecs describe-task-definition \
+            --task-definition "$CLUSTER-${{ matrix.service }}" \
+            --query taskDefinition > taskdef.json
+          echo "family=$CLUSTER-${{ matrix.service }}" >> "$GITHUB_OUTPUT"
+
+      - uses: aws-actions/amazon-ecs-render-task-definition@v1
+        id: render
+        with:
+          task-definition: taskdef.json
+          container-name: ${{ matrix.service }}
+          image: ${{ steps.build.outputs.image }}
+
+      - uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render.outputs.task-definition }}
+          service: ${{ env.CLUSTER }}-${{ matrix.service }}
+          cluster: ${{ env.CLUSTER }}
+          # 배포가 안정화될 때까지 기다린다. 여기서 기다리지 않으면
+          # 워크플로는 초록인데 실제로는 롤백된 상태일 수 있다.
+          wait-for-service-stability: true
+          wait-for-minutes: 15
