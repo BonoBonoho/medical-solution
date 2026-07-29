@@ -29,13 +29,16 @@ RuleSet
  ├── effectiveFrom / effectiveTo
  ├── priority          (좁은 스코프가 넓은 스코프를 override)
  └── rules[]
-      ├── code           예: WEEKLY_MAX_HOURS
-      ├── params         예: { limit: 52, includeOvertime: true }
+      ├── code           예: WEEKLY_MAX_MINUTES
+      ├── instanceKey?   같은 코드의 규칙을 여러 개 둘 때의 식별자
+      ├── params         예: { limitMinutes: 3120 }
       ├── severity       BLOCK | WARN | INFO
       └── legalBasis     "근로기준법 제53조" (UI에 근거 표시)
 ```
 
 `severity`를 규칙 데이터에 두는 이유: 같은 규칙이라도 어떤 기관은 "저장 자체를 막아달라", 어떤 기관은 "경고만 띄우고 진행"을 원합니다. 이건 정책이지 코드가 아닙니다.
+
+`instanceKey`가 필요한 이유: 금지 패턴처럼 **한 코드에 여러 인스턴스가 필요한 규칙**이 있습니다. `E→D 금지`와 `N→E 금지`는 둘 다 `FORBIDDEN_SHIFT_PATTERN`입니다. 코드만으로 덮어쓰기를 판정하면 뒤에 온 규칙이 앞의 것을 **오류 없이 조용히 지워버립니다.** 구현 중 실제로 발생한 결함이며, 상세는 [12. 구현 노트 §2.1](12-implementation-notes.md#21-규칙-인스턴스를-코드만으로-키잉하면-규칙이-사라진다) 참고.
 
 ---
 

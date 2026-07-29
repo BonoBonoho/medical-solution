@@ -33,6 +33,7 @@
 | [09. PC 사용 통제](docs/09-pc-usage-control.md) | 업무외 사이트 차단, PC-OFF, 프라이버시 |
 | [10. 보안·규제 준수](docs/10-security-compliance.md) | 개인정보보호법, 위치정보법, ISMS-P |
 | [11. 개발 로드맵](docs/11-roadmap.md) | 단계별 마일스톤, 팀 구성, 리스크 |
+| [12. 구현 노트](docs/12-implementation-notes.md) | 구현 현황, 발견된 설계 결함, 확정된 정책 |
 
 ## 빠른 요약
 
@@ -49,6 +50,25 @@
 
 **차별화 기능 (MVP 직후)**
 AI 듀티표 생성 → 수가 리포트(간호등급/야간전담) → PC 사용 통제 → 자격·교육 만료 관리
+
+## 현재 구현 상태
+
+```
+packages/domain/   ✅  근로시간 산정 · 규칙 엔진 · 연차 · 위치 검증   테스트 132개
+apps/api/          ✅  근태 · 근무표 · 휴가 MVP 경로                  e2e 26개
+apps/web/          ⬜  Next.js 관리자 웹
+apps/mobile/       ⬜  React Native
+apps/extension/    ⬜  브라우저 확장 (MV3)
+apps/ai/           ⬜  Python FastAPI + OR-Tools
+```
+
+```bash
+pnpm install
+pnpm check      # 전체 타입체크 + 테스트 (158개)
+```
+
+API 실행 방법과 시드 계정은 [apps/api/README.md](apps/api/README.md),
+구현 현황과 설계 변경 이력은 [12. 구현 노트](docs/12-implementation-notes.md) 참고.
 
 ## ⚠️ 법률 검토 고지
 
