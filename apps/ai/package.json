@@ -1,0 +1,11 @@
+{
+  "name": "@mediwork/ai",
+  "version": "0.1.0",
+  "private": true,
+  "description": "근무표 자동 생성 (CP-SAT) — Python 서비스. pnpm에서 함께 검증하기 위한 래퍼.",
+  "scripts": {
+    "test": "python3 -m pytest -q",
+    "typecheck": "python3 -c \"import compileall,sys; sys.exit(0 if compileall.compile_dir('src', quiet=1) else 1)\"",
+    "dev": "python3 -m uvicorn mediwork_ai.main:app --reload --port 3002 --app-dir src"
+  }
+}

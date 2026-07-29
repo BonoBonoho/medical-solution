@@ -60,17 +60,17 @@ apps/api/          ✅  근태 · 근무표 · 휴가 MVP 경로                
 apps/web/          ✅  근무표 그리드 (키보드 편집 · 실시간 규칙 평가)  테스트 17개
 apps/mobile/       ⬜  React Native
 apps/extension/    ⬜  브라우저 확장 (MV3)
-apps/ai/           ⬜  Python FastAPI + OR-Tools
+apps/ai/           ✅  근무표 자동 생성 (CP-SAT)                   테스트 51개
 ```
 
 ```bash
 pnpm install
-pnpm check      # 전체 타입체크 + 테스트 (인메모리 195개)
+pnpm check      # 전체 타입체크 + 테스트 (인메모리 246개)
 
 # PostgreSQL RLS 테스트까지 함께 돌리려면
 export DATABASE_ADMIN_URL=postgres://postgres@localhost:5432/mediwork_test
 export DATABASE_URL=postgres://mediwork_app@localhost:5432/mediwork_test
-pnpm check      # 222개
+pnpm check      # 273개
 ```
 
 API 실행 방법과 시드 계정은 [apps/api/README.md](apps/api/README.md),
